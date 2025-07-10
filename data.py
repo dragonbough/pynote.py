@@ -5,30 +5,45 @@ import sqlite3
 if not os.path.isfile("pynote.db"):
     db_con = sqlite3.connect("prototype.db")
     db_cur = db_con.cursor() 
-    db_cur.execute("CREATE TABLE NoteReference (OriginalNoteID INTEGER REFERENCES Note (ID), ReferencedNoteID INTEGER REFERENCES Note (ID), BlockNumber INTEGER, PRIMARY KEY (OriginalNoteID, ReferencedNoteID));")
-    db_cur.execute("CREATE TABLE Note (ID INTEGER PRIMARY KEY AUTOINCREMENT, Name VARCHAR, String TEXT);")
+    db_cur.execute("CREATE TABLE NoteReference (OriginalNoteName VARCHAR REFERENCES Note (Name), ReferencedNoteName VARCHAR REFERENCES Note(Name), BlockNumber INTEGER, PRIMARY KEY (OriginalNoteName, ReferencedNoteName));")
+    db_cur.execute("CREATE TABLE Note (Name VARCHAR PRIMARY KEY, String TEXT);")
     db_cur.execute("CREATE TABLE sqlite_sequence(name,seq);")
     db_con.commit()
 else:
     db_con = sqlite3.connect("pynote.db")
     db_cur = db_con.cursor()
 
-#retrieves the note data with the given id and returns as a dict of data
-def retrieve_note_data(id : int):
+#retrieves the note data with the given name and returns as a dict of data -- includes name, text and references
+def retrieve_note_data(name : str):
     
-    db_note_data = db_cur.execute("SELECT * FROM Note WHERE ID = (?)", id)
+    note_dict = {}
     
+    db_notes = db_cur.execute("SELECT * FROM Note WHERE Name = (?)", (name,))
+    db_note_data = db_notes.fetchone()
     if db_note_data:
-        note_dict = {"id" : int(db_note_data[0]), "name" : db_note_data[1], "text" : db_note_data[2]}
+        
+        note_dict.update({"name" : db_note_data[0], "text" : db_note_data[1]})
+        
+        db_note_references = db_cur.execute("SELECT * FROM NoteReference WHERE OriginalNoteName = (?)", (name,))
+        db_note_reference_data = db_note_references.fetchall()
+        reference_dict = {}
+        for reference in db_note_reference_data:
+            
+            #reference[1] -- referenced note name, reference[2] -- block number
+            reference_dict.update({reference[1] : int(reference[2])})
+        
+        note_dict.update({"references" : reference_dict})
+        
     else:
-        raise Exception(f"Note data with ID {id} not found.")
+        raise Exception(f"Note data with name: {name} not found.")
     
     return note_dict
 
-def note_in_db(name, text):
+#checks for if note with given name is in the database
+def note_in_db(name):
     
-    existing_notes = db_cur.execute("SELECT * FROM Note WHERE Name = (?) AND String = (?)", (name, text))
-    if existing_notes:
+    existing_notes = db_cur.execute("SELECT * FROM Note WHERE Name = (?)", (name,))
+    if existing_notes.fetchall():
         return True
     return False
 
@@ -40,16 +55,41 @@ def insert_note_data(name : str, text : str):
     
     return
 
-def update_note_data(id : int, name : str, text : str):
+def update_note_data(old_name : str, new_name : str, text : str):
     
-    db_cur.execute("UPDATE Note SET Name = (?), String = (?) WHERE ID = (?)", (name, text, id))
+    db_cur.execute("UPDATE Note SET Name = (?), String = (?) WHERE Name = (?)", (new_name, text, old_name))
     
     db_con.commit()
     
     return
 
-def update_note_reference_data(id : int, referenceid : int, block_number : int):
+def update_note_reference_data(name : str, reference_name : str, block_number : int):
     
-    db_cur.execute("UPDATE NoteReference SET OriginalNoteID = (?), ReferencedNoteID = (?), BlockNumber = (?)", (id, referenceid, block_number))
+    db_cur.execute("UPDATE NoteReference SET OriginalNoteName = (?), ReferencedNoteName = (?), BlockNumber = (?) WHERE Name = (?)", (name, reference_name, block_number, name))
+    db_con.commit()
+    
+#empties database
+def CLEAR_TABLE(table_name : str = ""):
+    
+    
+    if table_name: 
+        if table_name.lower() == "note":
+            table == "Note"
+        elif table_name.lower() == "notereference":
+            table == "NoteReference"
+        else:
+            raise Exception(f"Table name: {table_name} invalid")
+        if input(f"Are you sure you want to delete all entries from {table}? (y/n) ").lower() == "y":
+            print(f"Deleting entries from {table} table...")
+            db_cur.execute("DELETE FROM (?)", (table,))
+        else:
+            return
+    else:
+        if input(f"Are you sure you want to delete all entries from all tables in pynote.db? (y/n) ").lower() == "y":
+            print(f"Deleting entries from all tables in pynote.db...")
+            db_cur.execute("DELETE FROM Note")
+            db_cur.execute("DELETE FROM NoteReference")
+        else:
+            return
     
     db_con.commit()
