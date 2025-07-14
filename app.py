@@ -38,13 +38,22 @@ class Note():
     #solidifies database update -- if not in database already, inserted. if already in database, update database entry
     def update_database(self):
         
-        if not data.note_in_db(self.name):
-            data.insert_note_data(self.name, self.text)
-        else:    
-            data.update_note_data(self.original_name, self.name, self.text)
+        original_name = self.original_name if self.original_name else self.name
         
+        #if the original name of the note is not present in the DB, just insert this version 
+        if not data.note_in_db(original_name):
+            data.insert_note_data(self.name, self.text)
+        #if the original name of the note is present in the DB just update the name and text to be what it is now 
+        else:    
+            data.update_note_data(original_name, self.name, self.text)
+        
+        #for each reference in this note just update entries in DB, or if not in DB, insert them 
         for reference_name in list(self.references.keys()):
-            data.update_note_reference_data(self.name, reference_name, self.references[reference_name])
+            
+            if data.reference_in_db(self.name, reference_name):
+                data.update_note_reference_data(self.name, reference_name, self.references[reference_name])
+            else:
+                data.insert_note_reference_data(self.name, reference_name, self.references[reference_name])
             
     def reference_note(self, referenced_note_name : str, block_number : int):
         #block number refers to the specific word index that the link was addded to
@@ -53,6 +62,15 @@ class Note():
 #stores the current user notes
 class UserNotes():
     
+    #static method that returns a UserNotes object of all the user notes
+    @staticmethod
+    def get_all_notes():
+        
+        notes = []
+        for note_data in data.retrieve_all_note_data():
+            notes.append(Note(note_data["name"], note_data["text"], note_data["references"]))
+        return UserNotes(notes)
+    
     def __init__(self, notes : list[Note] = []):
         
         self._notes = notes
@@ -60,8 +78,9 @@ class UserNotes():
     def get(self, note_name : str = None):
         
         #you can get the note via name, or just all of them if no name is inputted
-        if note_name in [note.name for note in self._notes]:
-            return [note.name for note in self._notes if note.name == note_name][0]
+        if note_name:
+            if note_name in [note.name for note in self._notes]:
+                return [note for note in self._notes if note.name == note_name][0]
           
         return self._notes
     
@@ -81,21 +100,7 @@ class UserNotes():
             [note.update_database() for note in self._notes if note.name in note_names]
             
             
-#network graph representation of each note
-class NoteNetwork():
-    
-    def __init__(self, notes : UserNotes):
-        
-        pass
-        
-# user_notes = UserNotes()
-# for i in range (10):
-#     note = Note.get_note(f"note no.{i}")
-#     user_notes.add(note)
-
-# print([note.name for note in user_notes.get()])
- 
-# for note in user_notes.get():
-#     note.update_name(f"{note.name} is now updated")   
-    
-# user_notes.update_notes()
+user_notes = UserNotes.get_all_notes()
+note1 = user_notes.get("note no.0 is now updated")
+note2 = user_notes.get("note no.4 is now updated")
+note1.reference_note(note2.name, 1)
