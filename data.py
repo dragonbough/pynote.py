@@ -39,11 +39,25 @@ def retrieve_note_data(name : str):
     
     return note_dict
 
+def retrieve_all_note_data():
+    
+    db_note_names = db_cur.execute("SELECT Name FROM Note")
+    note_names = db_note_names.fetchall()
+    
+    return [retrieve_note_data(name[0]) for name in note_names]
+
 #checks for if note with given name is in the database
 def note_in_db(name):
     
     existing_notes = db_cur.execute("SELECT * FROM Note WHERE Name = (?)", (name,))
     if existing_notes.fetchall():
+        return True
+    return False
+
+def reference_in_db(note_name, reference_name, block_number):
+    
+    existing_references = db_cur.execute("SELECT * FROM NoteReference WHERE OriginalNoteName = (?) AND ReferencedNoteName = (?) AND BlockNumber = (?)", (note_name, reference_name, block_number))
+    if existing_references.fetchall():
         return True
     return False
 
@@ -54,6 +68,11 @@ def insert_note_data(name : str, text : str):
     db_con.commit()
     
     return
+
+def insert_note_reference_data(note_name : str, reference_name : str, block_number : int):
+    
+    db_cur.execute("INSERT INTO NoteReference (OriginalNoteName, ReferencedNoteName, BlockNumber)", (note_name, reference_name, block_number))
+    db_con.commit()
 
 def update_note_data(old_name : str, new_name : str, text : str):
     
@@ -93,3 +112,4 @@ def CLEAR_TABLE(table_name : str = ""):
             return
     
     db_con.commit()
+    
