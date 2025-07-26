@@ -67,6 +67,7 @@ def insert_note_data(name : str, text : str):
 
     db_cur.execute("INSERT INTO Note (Name, String) VALUES (?, ?)", (name, text))
     db_con.commit()
+    print(f"{name} note data successfully inserted!")
 
     return
 
@@ -74,19 +75,25 @@ def insert_note_reference_data(note_name : str, reference_name : str, block_numb
 
     db_cur.execute("INSERT INTO NoteReference (OriginalNoteName, ReferencedNoteName, BlockNumber)", (note_name, reference_name, block_number))
     db_con.commit()
+    print(f"{note_name} note reference: {reference_name} successfully inserted!")
+
 
 def update_note_data(old_name : str, new_name : str, text : str):
 
     db_cur.execute("UPDATE Note SET Name = (?), String = (?) WHERE Name = (?)", (new_name, text, old_name))
 
     db_con.commit()
+    print(f"{new_name} note data successfully updated!")
+
 
     return
 
-def update_note_reference_data(name : str, reference_name : str, block_number : int):
+def update_note_reference_data(note_name : str, reference_name : str, block_number : int):
 
-    db_cur.execute("UPDATE NoteReference SET OriginalNoteName = (?), ReferencedNoteName = (?), BlockNumber = (?) WHERE Name = (?)", (name, reference_name, block_number, name))
+    db_cur.execute("UPDATE NoteReference SET OriginalNoteName = (?), ReferencedNoteName = (?), BlockNumber = (?) WHERE Name = (?)", (note_name, reference_name, block_number, note_name))
     db_con.commit()
+    print(f"{note_name} note reference: {reference_name} successfully updated!")
+
 
 #empties database -- debugging stuff
 def CLEAR_TABLE(table_name : str = ""):
