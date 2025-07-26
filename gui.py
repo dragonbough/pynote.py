@@ -2,7 +2,7 @@ import sys
 import app
 from PyQt6.QtCore import (QJsonValue, pyqtSlot, pyqtSignal, Qt, QUrl)
 from PyQt6.QtWidgets import (QMainWindow, QTabWidget, QWidget, QVBoxLayout, QTextBrowser, QApplication)
-from PyQt6.QtGui import (QTextDocument, QFont)
+from PyQt6.QtGui import (QTextDocument, QShortcut, QShortcutEvent, QKeySequence)
 
 from PyQt6.QtWebEngineWidgets import (QWebEngineView)
 from PyQt6.QtWebEngineCore import (QWebEngineSettings)
@@ -17,14 +17,31 @@ class NoteDocument(QTextDocument):
 
     def __init__(self, note : app.Note = None):
 
-        self.note = note
-
         super().__init__()
+
+        self.note = note
+        self.setMarkdown(self.note.text)
+
+    def get_text(self, text_format : str = "markdown"):
+
+        if text_format == "plain":
+            return self.toPlainText()
+        elif text_format == "html":
+            return self.toHtml()
+        elif text_format == "markdown":
+            return self.toMarkdown()
+        else:
+            raise Exception(f"Invalid text format: {text_format}")
+
+    #updates the underlying Note objects text
+    def update_text(self):
+
+        self.note.update_text(self.get_text())
 
 
 class NoteEditor(QTextBrowser):
 
-    new_note_set_signal = pyqtSignal(object)
+    new_note_set_signal = pyqtSignal(app.Note)
 
     def __init__(self, notes : app.UserNotes = app.user_notes):
 
@@ -36,17 +53,32 @@ class NoteEditor(QTextBrowser):
 
         self.note_documents = [NoteDocument(note) for note in notes.get()]
         self.textChanged.connect(self.check_for_commands)
+        self.textChanged.connect(self.update_note_text)
         self.anchorClicked.connect(self.check_link)
 
+        self.save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.save_shortcut.activated.connect(self.save_document)
+
+
+    def save_document(self):
+
+        app.user_notes.update_notes(self.document().note)
+
+    #convenience function for updating the current note's text
+    def update_note_text(self):
+
+        self.document().update_text()
+
     #checks note text for specific markdown commands using regex and replaces with formatted html in real time
-    # --- BUG ---
+    # --- BUG --- INCONSISTENT FORMATTING BETWEEN LINES
     def check_for_commands(self):
 
         cursor = self.textCursor()
 
-        print("\n------ NEW HTML ------")
-        print(f"\n{self.document().toHtml()}")
-        print("\n------ END HTML ------")
+        #DEBUGGING STUFF
+        # print("\n------ NEW HTML ------")
+        # print(f"\n{self.document().toHtml()}")
+        # print("\n------ END HTML ------")
 
         text = self.document().toPlainText()
 
@@ -109,7 +141,9 @@ class NoteEditor(QTextBrowser):
     def set_note(self, note_name : str):
         if self.check_in_documents(note_name):
             self.setDocument([document for document in self.note_documents if document.note.name == note_name][0])
-            self.insertPlainText("#")
+            #if the note is empty, insert a hashtag to start a heading
+            if not self.toPlainText():
+                self.insertPlainText("#")
         else:
             raise Exception(f"Document name {note_name} does not exist")
 
@@ -118,6 +152,7 @@ class NoteEditor(QTextBrowser):
         if type(note_name) != str:
             raise Exception(f"Invalid note name: {note_name} -- not a string.")
         return note_name in [document.note.name for document in self.note_documents]
+
 
     #when the link is clicked, checks if the link is a note reference and then sends the editor there if thats the case
     def check_link(self, link : QUrl):
@@ -236,7 +271,7 @@ class NoteNetwork():
 
 class NoteNetworkView(QWebEngineView):
 
-    note_selected_signal = pyqtSignal(object) #custom signal emitted to show note was selected
+    note_selected_signal = pyqtSignal(app.Note) #custom signal emitted to show note was selected
 
     def __init__(self, note_network : NoteNetwork, debug : bool = False):
         super().__init__()
@@ -282,47 +317,47 @@ class Window(QMainWindow):
 
         self.tabs = QTabWidget()
         self.tab1 = QWidget()
-        self.tab2 = QWidget()
 
         self.tab1layout = QVBoxLayout()
         self.tab1layout.setContentsMargins(0, 0, 0, 0)
         self.tab1layout.setSpacing(0)
-        self.tab2layout = QVBoxLayout()
 
         self.tab1.setLayout(self.tab1layout)
-        self.tab2.setLayout(self.tab2layout)
 
-        self.texteditor = NoteEditor()
         self.note_network = NoteNetwork(bg_color=self.palette().window().color().name(), screen_max_height=max_screen_height)
         self.graph = NoteNetworkView(self.note_network, debug=True)
 
         self.graph.note_selected_signal.connect(self.open_editor)
-        self.texteditor.new_note_set_signal.connect(self.open_editor)
 
         self.tab1layout.addWidget(self.graph)
-        self.tab2layout.addWidget(self.texteditor)
 
-        self.tabs.addTab(self.tab1, "Note Graph")
-        self.tabs.addTab(self.tab2, "Note Editor")
+        self.tabs.addTab(self.tab1, "Your Note Network")
 
         self.setCentralWidget(self.tabs)
 
     #opens the editor tab and sets it to the correct document, with the document name as tab title
     def open_editor(self, selected_node):
 
-        print(selected_node.name)
-        self.texteditor.set_note(selected_node.name)
-        self.tabs.setCurrentIndex(1)
-        self.tabs.setTabText(1, selected_node.name)
+        #creates editor for the note
+        self.editor = NoteEditor()
+        self.editor.new_note_set_signal.connect(self.open_editor)
+        self.editor.set_note(selected_node.name)
 
-    #sets shown to true -- window may still not be shown as loading isnt finished but once done it will know what to set it to
-    def show(self, *args):
-        self.shown = True
-        super().show(*args)
+        #creates page layout and tab, adding it to tabs
+        self.note_tab_layout = QVBoxLayout()
+        self.note_tab = QWidget()
+        self.note_tab.setLayout(self.note_tab_layout)
+        self.note_tab_layout.addWidget(self.editor)
+        self.tabs.addTab(self.note_tab, selected_node.name)
+
+        #sets current tab to the note
+        self.tabs.setCurrentIndex(self.tabs.indexOf(self.note_tab))
+
 
 Application = QApplication(sys.argv)
 height = Application.primaryScreen().size().height()
 window = Window(height)
+window.setWindowTitle("pynote!")
 
 window.show()
 
