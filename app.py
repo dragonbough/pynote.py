@@ -27,11 +27,15 @@ class Note():
         self.references = references
 
     #updates name but doesn't update DB yet -- must keep reference of original name
-    def update_name(self, new_name):
+    def update_name(self, new_name : str):
 
         if not self.original_name:
             self.original_name = self.name
         self.name = new_name
+
+    def update_text(self, text : str):
+
+        self.text = text
 
     #solidifies database update -- if not in database already, inserted. if already in database, update database entry
     def update_database(self):
@@ -52,6 +56,7 @@ class Note():
                 data.update_note_reference_data(self.name, reference_name, self.references[reference_name])
             else:
                 data.insert_note_reference_data(self.name, reference_name, self.references[reference_name])
+
 
     def reference_note(self, referenced_note_name : str, block_number : int):
         #block number refers to the specific word index that the link was addded to
@@ -91,13 +96,17 @@ class UserNotes():
         elif type(notes) == Note:
             self._notes.append(notes)
 
-    def update_notes(self, note_names : list[str] = None):
+    def update_notes(self, notes : list[Note] = None):
 
-        #if no specific note_names are entered, just updates all of them
-        if note_names == None:
+        #if no specific notes are passed in, just updates all of them
+        if notes == None:
             [note.update_database() for note in self._notes]
         else:
-            [note.update_database() for note in self._notes if note.name in note_names]
+            #if its just a single note...
+            if type(notes) != list:
+                notes.update_database()
+            else:
+                [note.update_database() for note in self._notes if note in notes]
 
 
 user_notes = UserNotes.get_all_notes()
